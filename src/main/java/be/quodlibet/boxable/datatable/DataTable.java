@@ -190,7 +190,12 @@ public class DataTable {
 		for (List inputList : data) {
 			for (Object v : inputList) {
 				String value = v.toString();
-				if (value.contains("" + separator)) {
+				boolean mustEscapeQuotes = value.contains("\"");
+				// add and escape quotes according to https://tools.ietf.org/html/rfc4180#page-2
+				if (value.contains("" + separator) || value.contains("\n") || mustEscapeQuotes) {
+					if (mustEscapeQuotes) {
+						value = value.replaceAll("\"", "\"\"");
+					}
 					// surround value with quotes if it contains the escape
 					// character
 					value = "\"" + value + "\"";
@@ -223,7 +228,7 @@ public class DataTable {
 		Boolean isHeader = hasHeader;
 		Boolean isFirst = true;
 		Boolean odd = true;
-		Map<Integer, Float> colWidths = new HashMap();
+		Map<Integer, Float> colWidths = new HashMap<>();
 		int numcols = 0;
 		for (CSVRecord line : records) {
 
@@ -235,7 +240,7 @@ public class DataTable {
 					String cellValue = line.get(i);
 					float textWidth = FontUtils.getStringWidth(headerCellTemplate.getFont(), " " + cellValue + " ",
 							headerCellTemplate.getFontSize());
-					float widthPct = textWidth * 100 / table.getWidth();
+					// float widthPct = textWidth * 100 / table.getWidth();
 					totalWidth += textWidth;
 					numcols = i;
 				}
