@@ -171,6 +171,7 @@ public class DataTable {
 		return lastColumnCellTemplate;
 	}
 
+
 	/**
 	 * <p>
 	 * Add a List of Lists to the Table
@@ -181,7 +182,20 @@ public class DataTable {
 	 * @throws IOException parsing error
 	 */
 	public void addListToTable(List<List> data, Boolean hasHeader) throws IOException {
-		char separator = ';';
+		addListToTable(data, hasHeader, ';');
+	}
+
+	/**
+	 * <p>
+	 * Add a List of Lists to the Table
+	 * </p>
+	 *
+	 * @param data {@link Table}'s data
+	 * @param hasHeader boolean if {@link Table} has header
+	 * @param separator char on which the data will be joined
+	 * @throws IOException parsing error
+	 */
+	public void addListToTable(List<List> data, Boolean hasHeader, char separator) throws IOException {
 		if (data == null || data.isEmpty()) {
 			return;
 		}
