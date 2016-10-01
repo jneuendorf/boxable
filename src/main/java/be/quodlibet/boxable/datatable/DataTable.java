@@ -93,6 +93,10 @@ public class DataTable {
 		lastColumnCellTemplate.copyCellStyle(defaultCellTemplate);
 	}
 
+	private static String removeLastChar(String str) {
+		return str.substring(0, str.length() - 1);
+	}
+
 	/**
 	 * <p>
 	 * Set the table to add the csv content to
@@ -171,7 +175,6 @@ public class DataTable {
 		return lastColumnCellTemplate;
 	}
 
-
 	/**
 	 * <p>
 	 * Add a List of Lists to the Table
@@ -196,6 +199,21 @@ public class DataTable {
 	 * @throws IOException parsing error
 	 */
 	public void addListToTable(List<List> data, Boolean hasHeader, char separator) throws IOException {
+		addListToTable(data, hasHeader, separator, false);
+	}
+
+	/**
+	 * <p>
+	 * Add a List of Lists to the Table
+	 * </p>
+	 *
+	 * @param data {@link Table}'s data
+	 * @param hasHeader boolean if {@link Table} has header
+	 * @param separator char on which the data will be joined
+	 * @param autoExpand boolean if to expand the last non-empty cell of a row to fit the remaining width of the table
+	 * @throws IOException parsing error
+	 */
+	public void addListToTable(List<List> data, Boolean hasHeader, char separator, boolean autoExpand) throws IOException {
 		if (data == null || data.isEmpty()) {
 			return;
 		}
@@ -220,11 +238,7 @@ public class DataTable {
 			output = removeLastChar(output);
 			output += "\n";
 		}
-		addCsvToTable(output, hasHeader, separator);
-	}
-
-	private static String removeLastChar(String str) {
-		return str.substring(0, str.length() - 1);
+		addCsvToTable(output, hasHeader, separator, autoExpand);
 	}
 
 	/**
@@ -238,6 +252,21 @@ public class DataTable {
 	 * @throws IOException parsing error
 	 */
 	public void addCsvToTable(String data, Boolean hasHeader, char separator) throws IOException {
+		addCsvToTable(data, hasHeader, separator, false);
+	}
+
+	/**
+	 * <p>
+	 * Add a String representing a CSV document to the Table
+	 * </p>
+	 *
+	 * @param data {@link Table}'s data
+	 * @param hasHeader boolean if {@link Table} has header
+	 * @param separator {@code char} on which data will be parsed
+	 * @param autoExpand boolean if to expand the non-empty last cell of a row to fit the remaining width of the table
+	 * @throws IOException parsing error
+	 */
+	public void addCsvToTable(String data, Boolean hasHeader, char separator, boolean autoExpand) throws IOException {
 		Iterable<CSVRecord> records = CSVParser.parse(data, CSVFormat.EXCEL.withDelimiter(separator));
 		Boolean isHeader = hasHeader;
 		Boolean isFirst = true;
@@ -245,25 +274,23 @@ public class DataTable {
 		Map<Integer, Float> colWidths = new HashMap<>();
 		int numcols = 0;
 		for (CSVRecord line : records) {
-
 			if (isFirst) {
-
 				// calculate the width of the columns
 				float totalWidth = 0.0f;
-				for (int i = 0; i < line.size(); i++) {
+				numcols = line.size();
+				for (int i = 0; i < numcols; i++) {
 					String cellValue = line.get(i);
 					float textWidth = FontUtils.getStringWidth(headerCellTemplate.getFont(), " " + cellValue + " ",
 							headerCellTemplate.getFontSize());
 					// float widthPct = textWidth * 100 / table.getWidth();
 					totalWidth += textWidth;
-					numcols = i;
 				}
 				// totalWidth has the total width we need to have all columns
 				// full sized.
 				// calculate a factor to reduce/increase size by to make it fit
 				// in our table
 				float sizefactor = table.getWidth() / totalWidth;
-				for (int i = 0; i <= numcols; i++) {
+				for (int i = 0; i < numcols; i++) {
 					String cellValue = "";
 					if (line.size() >= i) {
 						cellValue = line.get(i);
@@ -277,10 +304,11 @@ public class DataTable {
 				}
 				isFirst = false;
 			}
+
 			if (isHeader) {
 				// Add Header Row
 				Row h = table.createRow(headerCellTemplate.getCellHeight());
-				for (int i = 0; i <= numcols; i++) {
+				for (int i = 0; i < numcols; i++) {
 					String cellValue = line.get(i);
 					Cell c = h.createCell(colWidths.get(i), cellValue, headerCellTemplate.getAlign(),
 							headerCellTemplate.getValign());
@@ -292,7 +320,9 @@ public class DataTable {
 				isHeader = false;
 			} else {
 				Row r = table.createRow(dataCellTemplateEven.getCellHeight());
-				for (int i = 0; i <= numcols; i++) {
+				// width from the last created cell to the end of the table (used for cell auto expansion)
+				float remainingWidth = 1;
+				for (int i = 0; i < numcols; i++) {
 					// Choose the correct template for the cell
 					Cell template = dataCellTemplateEven;
 					if (odd) {
@@ -301,17 +331,35 @@ public class DataTable {
 					if (i == 0 & !firstColumnCellTemplate.hasSameStyle(defaultCellTemplate)) {
 						template = firstColumnCellTemplate;
 					}
-					if (i == numcols & !lastColumnCellTemplate.hasSameStyle(defaultCellTemplate)) {
+					if (i == numcols - 1 & !lastColumnCellTemplate.hasSameStyle(defaultCellTemplate)) {
 						template = lastColumnCellTemplate;
 					}
-					String cellValue = "";
-					if (line.size() >= i) {
-						cellValue = line.get(i);
+					String cellValue = line.get(i);
+					float cellWidth = colWidths.get(i);
+					boolean ignoreNextCells = false;
+					// adjust cell width only if auto expanding and not in the last cell
+					if (autoExpand && i < numcols - 1) {
+						ignoreNextCells = true;
+						// check if all remaining cells in the current row are empty
+						for (int j = i + 1; j < numcols; j++) {
+							if (line.get(j).length() > 0) {
+								ignoreNextCells = false;
+								break;
+							}
+						}
+						if (ignoreNextCells) {
+							cellWidth = remainingWidth;
+						}
+						// this needs to be calculated only if autoExpand is true
+						remainingWidth -= cellWidth;
 					}
-					Cell c = r.createCell(colWidths.get(i), cellValue, template.getAlign(), template.getValign());
+					Cell c = r.createCell(cellWidth, cellValue, template.getAlign(), template.getValign());
 					// Apply style of header cell to this cell
 					c.copyCellStyle(template);
 					c.setText(cellValue);
+					if (ignoreNextCells) {
+						break;
+					}
 				}
 			}
 			odd = !odd;
